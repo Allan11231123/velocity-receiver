@@ -26,13 +26,13 @@ class VelocityReceiver(Node):
         self.carla_info_subscription = self.create_subscription(
             CarlaEgoVehicleInfo,
             "/carla/ego_vehicle/vehicle_info",
-            self.carla_listener_callback,
+            self.carla_info_listener_callback,
             1,
         )
         self.carla_status_subscription = self.create_subscription(
             CarlaEgoVehicleStatus,
             "/carla/ego_vehicle/vehicle_status",
-            self.carla_listener_callback,
+            self.carla_status_listener_callback,
             1,
         )
 
@@ -60,7 +60,7 @@ class VelocityReceiver(Node):
         self.get_logger().info("try to catch vehicle info message from carla")
         self.vehicle_info = msg
         self.update_vehicle_report()
-    def carla_status_listener_callbach(self,msg):
+    def carla_status_listener_callback(self,msg):
         self.get_logger().info("try to catch vehicle status message from carla")
         self.vehicle_status = msg
         self.update_vehicle_report()
