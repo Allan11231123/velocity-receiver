@@ -27,7 +27,11 @@ class VelocityReceiver(Node):
             CarlaEgoVehicleInfo,
             "/carla/ego_vehicle/vehicle_info",
             self.carla_info_listener_callback,
-            1,
+            QoSProfile(
+                depth=10,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            ),
+
         )
         self.carla_status_subscription = self.create_subscription(
             CarlaEgoVehicleStatus,
@@ -78,14 +82,15 @@ class VelocityReceiver(Node):
         self.out_report = veh_report
 
     def compute_heading(self):
-        time_s = self.vehicle_status.control.header.stamp.secs
-        time_ns = self.vehicle_status.control.header.stamp.nsecs
+        time_s = self.vehicle_status.header.stamp.sec
+        time_ns = self.vehicle_status.header.stamp.nanosec
         time = time_s + time_ns*(10**(-9))
         if self.stamped_time is None:
             self.stamped_time = time
             return 0.0
-        
-        max_angle = self.vehicle_info.wheels.max_steer_angle
+
+        wheel0_info = self.vehicle_info.wheels[0]
+        max_angle = wheel0_info.max_steer_angle
         steering = self.vehicle_status.control.steer
         rad = math.radians((max_angle/2)*steering)
         
