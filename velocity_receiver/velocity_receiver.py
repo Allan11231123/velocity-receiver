@@ -14,7 +14,7 @@ from geometry_msgs.msg import (
 
 from autoware_auto_vehicle_msgs.msg import VelocityReport
 from carla_msgs.msg import CarlaEgoVehicleInfo,CarlaEgoVehicleStatus
-from rclpy.qos import QoSReliabilityPolicy, QoSProfile, QoSHistoryPolicy
+from rclpy.qos import QoSReliabilityPolicy, QoSProfile, QoSHistoryPolicy,DurabilityPolicy
 import math
 
 
@@ -40,9 +40,8 @@ class VelocityReceiver(Node):
             VelocityReport,
             "/vehicle/status/velocity_status",
             QoSProfile(
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=1,
-                reliability=QoSReliabilityPolicy.RELIABLE,
+                depth=10,
+                durability=DurabilityPolicy.TRANSIENT_LOCAL,
             ),
         )
 
@@ -90,8 +89,9 @@ class VelocityReceiver(Node):
         steering = self.vehicle_status.control.steer
         rad = math.radians((max_angle/2)*steering)
         
-        result = (rad-self.steer)/self.stamped_time
+        result = (rad-self.steer)/(time-self.stamped_time)
         self.steer = rad
+        self.stamped_time = time
         return result
 
 def main():
