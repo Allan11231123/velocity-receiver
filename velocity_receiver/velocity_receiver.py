@@ -86,7 +86,7 @@ class VelocityReceiver(Node):
 
         self.initialpose_publisher = self.create_publisher(
             PoseWithCovarianceStamped,
-            "/initialpose_temp",
+            "/initialpose",
             QoSProfile(
                 history=QoSHistoryPolicy.KEEP_LAST,
                 depth=1,
