@@ -1,0 +1,6 @@
+tf_static_yaml : "examples/tf_static.yaml"
+
+initialpose_yaml : "examples/initialpose.yaml"
+
+groundtruth_path : "examples/carla_groundtruth.csv"
+    
