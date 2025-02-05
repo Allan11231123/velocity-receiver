@@ -3,15 +3,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 import copy
 from geometry_msgs.msg import (
-    TwistWithCovariance,
     PoseWithCovarianceStamped,
-    PoseWithCovariance,
-    Pose,
     PoseStamped,
-    Twist,
-    Transform,
     TransformStamped,
-    Quaternion,
 )
 
 from autoware_auto_vehicle_msgs.msg import VelocityReport
@@ -20,24 +14,24 @@ from rclpy.qos import QoSReliabilityPolicy, QoSProfile, QoSHistoryPolicy
 from tf2_msgs.msg import TFMessage
 from nav_msgs.msg import Odometry
 
-import math
-import csv
-import os
-import yaml
+import csv, yaml, os
 
 
 class VelocityReceiver(Node):
     def __init__(self):
         super().__init__("velocity_receiver")
 
-        config_path = config_path = os.path.dirname(os.path.realpath(__file__))+"/../config/" + "config.yaml"
+        # config_path = config_path = os.path.dirname(os.path.realpath(__file__))+"/../config/" + "config.yaml"
 
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-
-        tf_static_path = config["tf_static_yaml"]
-        initialpose_path = config["initialpose_yaml"]
-        groundtruth_path = config["groundtruth_path"]
+        # with open(config_path, 'r') as f:
+        #     config = yaml.safe_load(f)
+        #set parameter 'initialpose_yaml_path' and set default value to ""
+        self.declare_parameter("initialpose_yaml_path","")
+        self.declare_parameter("tf_static_path","")
+        self.declare_parameter("groundtruth_dir","./output")
+        # tf_static_path = config["tf_static_yaml"]
+        # initialpose_path = config["initialpose_yaml"]
+        # groundtruth_path = config["groundtruth_path"]
 
         self.carla_status_subscription = self.create_subscription(
             CarlaEgoVehicleStatus,
@@ -96,15 +90,23 @@ class VelocityReceiver(Node):
         )
 
 
-
+        self.initialpose_msg = None
         self.vehicle_status = None
         self.vehicle_info = None
         self.stamped_time = None
         self.out_report = None
 
-        self.load_initialpose(initialpose_path)
+        initialpose_path = self.get_parameter("initialpose_yaml_path").get_parameter_value().string_value
+        tf_static_path = self.get_parameter("tf_static_path").get_parameter_value().string_value
+        if initialpose_path != "":
+            self.load_initialpose(initialpose_path)
+        if tf_static_path == "":
+            self.get_logger().warning("Parameter 'tf_static_path' is not passed, node may crush while running.")
         self.load_tf_static(tf_static_path)
-
+        groundtruth_dir = self.get_parameter("groundtruth_dir").get_parameter_value().string_value
+        if not os.path.exists(groundtruth_dir):
+            os.mkdir(groundtruth_dir)
+        groundtruth_path = os.path.join(groundtruth_dir,"carla_groundtruth.csv")
         csv_file = open(groundtruth_path, 'w', newline='')
         self.csv_writer = csv.writer(csv_file)
         self.csv_writer.writerow(["sec", "nsec", "x", "y"])
@@ -138,32 +140,38 @@ class VelocityReceiver(Node):
         tf_msg.transforms = static_transforms
         self.tf_static_publisher.publish(tf_msg)
 
-    def load_initialpose(self, initialpose_path):
-        with open(initialpose_path, 'r') as f:
-            initialpose_data = yaml.safe_load(f)
+    def load_initialpose(self, initialpose_path, odometry=None):
+        if initialpose_path != "":
+            with open(initialpose_path, 'r') as f:
+                initialpose_data = yaml.safe_load(f)
 
-        initialpose_msg = PoseWithCovarianceStamped()
-        initialpose_msg.header.frame_id = "map"
-        position = initialpose_data["position"]
-        orientation = initialpose_data["orientation"]
+            self.initialpose_msg = PoseWithCovarianceStamped()
+            self.initialpose_msg.header.frame_id = "map"
+            position = initialpose_data["position"]
+            orientation = initialpose_data["orientation"]
 
-        initialpose_msg.pose.pose.position.x = position["x"]
-        initialpose_msg.pose.pose.position.y = position["y"]
-        initialpose_msg.pose.pose.position.z= position["z"]
+            self.initialpose_msg.pose.pose.position.x = position["x"]
+            self.initialpose_msg.pose.pose.position.y = position["y"]
+            self.initialpose_msg.pose.pose.position.z= position["z"]
 
-        initialpose_msg.pose.pose.orientation.x = orientation["x"]
-        initialpose_msg.pose.pose.orientation.y = orientation["y"]
-        initialpose_msg.pose.pose.orientation.z = orientation["z"]
-        initialpose_msg.pose.pose.orientation.w= orientation["w"]
-
-        self.initialpose_publisher.publish(initialpose_msg)
+            self.initialpose_msg.pose.pose.orientation.x = orientation["x"]
+            self.initialpose_msg.pose.pose.orientation.y = orientation["y"]
+            self.initialpose_msg.pose.pose.orientation.z = orientation["z"]
+            self.initialpose_msg.pose.pose.orientation.w= orientation["w"]
+        else:
+            self.initialpose_msg = PoseWithCovarianceStamped()
+            self.initialpose_msg.header.frame_id = "map"
+            self.initialpose_msg.pose = odometry.pose
+        self.initialpose_publisher.publish(self.initialpose_msg)
 
     def odometry_listener_callback(self,msg):
+        if self.initialpose_msg is None:
+            self.load_initialpose("",odometry=msg)
         groundtruth_msg = PoseStamped()
         groundtruth_msg.header = msg.header
         groundtruth_msg.pose = msg.pose.pose
         groundtruth_msg.header.frame_id = "map"
-        groundtruth_publisher.publish(groundtruth_msg)
+        self.groundtruth_publisher.publish(groundtruth_msg)
         self.csv_writer.writerow([msg.header.stamp.sec, msg.header.stamp.nanosec, msg.pose.pose.position.x, msg.pose.pose.position.y])
 
 
